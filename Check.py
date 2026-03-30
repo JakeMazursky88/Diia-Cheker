@@ -2,13 +2,13 @@ import requests
 import os
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-# Собираем ID (твой и друга), убираем пустые
+# Собираем ID, игнорируя пустые
 CHAT_IDS = [id for id in [os.getenv("TELEGRAM_CHAT_ID"), os.getenv("FRIEND_CHAT_ID")] if id]
 
 APP_ID = "1489715534"
 URL = f"https://itunes.apple.com/lookup?id={APP_ID}&country=ua"
 
-# Читаем старую версию
+# Читаем сохраненную версию
 if os.path.exists("version.txt"):
     with open("version.txt", "r") as f:
         last_version = f.read().strip()
@@ -20,7 +20,7 @@ try:
     if response.get('resultCount', 0) > 0:
         current_version = response['results'][0]['version']
         
-        # Если в App Store версия новее, чем у нас в файле
+        # Если в магазине версия новая
         if current_version != last_version:
             msg = f"🚀 Обновление Дії!\nНовая версия: {current_version}"
             
@@ -28,11 +28,11 @@ try:
                 requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", 
                              json={"chat_id": chat_id, "text": msg})
             
-            # Записываем новую версию в файл
+            # Сохраняем новую версию в файл
             with open("version.txt", "w") as f:
                 f.write(current_version)
             print(f"Обновлено до {current_version}")
         else:
-            print(f"Версия не менялась: {current_version}")
+            print(f"Версия не изменилась: {current_version}")
 except Exception as e:
     print(f"Ошибка: {e}")
