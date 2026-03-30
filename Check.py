@@ -2,7 +2,6 @@ import requests
 import os
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-222419273
 CHAT_IDS = [os.getenv("TELEGRAM_CHAT_ID"), os.getenv("FRIEND_CHAT_ID")]
 APP_ID = "1489715534"
 URL = f"https://itunes.apple.com/lookup?id={APP_ID}&country=ua"
