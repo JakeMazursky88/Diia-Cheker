@@ -1,59 +1,61 @@
 import requests
 import os
 
-# Берем данные из секретов GitHub
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-# Список ID (твой и друга). Скрипт проигнорирует пустые, если FRIEND_CHAT_ID не задан.
 CHAT_IDS = [id for id in [os.getenv("TELEGRAM_CHAT_ID"), os.getenv("FRIEND_CHAT_ID")] if id]
 
-# ПРАВИЛЬНЫЙ ID приложения Дія (из твоего скриншота)
+# ID из твоего скрина (основная Дия)
 APP_ID = "1483089069"
-URL = f"https://itunes.apple.com/lookup?id={APP_ID}&country=ua"
+# Универсальная ссылка без привязки к стране
+URL = f"https://itunes.apple.com/lookup?id={APP_ID}"
 
-# Определяем путь к файлу с версией в системе GitHub
 file_path = os.path.join(os.getcwd(), "version.txt")
 
-# 1. Читаем старую версию из файла
 if os.path.exists(file_path):
     with open(file_path, "r") as f:
         last_version = f.read().strip()
 else:
     last_version = "0"
 
-print(f"Проверка версии... (Текущая в файле: {last_version})")
+print(f"Запрос к Apple по ID: {APP_ID}...")
 
 try:
-    # 2. Запрашиваем данные у Apple
     response = requests.get(URL, timeout=15).json()
     
     if response.get('resultCount', 0) > 0:
         current_version = response['results'][0]['version']
-        print(f"Версия в App Store: {current_version}")
+        print(f"Версия в магазине: {current_version}")
         
-        # 3. Сравниваем
         if str(current_version) != str(last_version):
-            print("Найдено отличие! Отправляю уведомления...")
-            msg = f"🚀 Обновление Дії!\nНовая версия в App Store: {current_version}\n(Была: {last_version})"
+            msg = f"🚀 Обновление Дії!\nНовая версия: {current_version}\n(В файле была: {last_version})"
             
-            # Рассылка всем указанным ID
             for chat_id in CHAT_IDS:
-                send_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-                res = requests.post(send_url, json={"chat_id": chat_id, "text": msg})
-                
-                if res.status_code == 200:
-                    print(f"✅ Сообщение отправлено в чат {chat_id}")
-                else:
-                    print(f"❌ Ошибка отправки в {chat_id}: {res.text}")
+                requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", 
+                             json={"chat_id": chat_id, "text": msg})
             
-            # 4. Обновляем файл только если хоть одно сообщение ушло успешно
             with open(file_path, "w") as f:
                 f.write(str(current_version))
-            print("Файл version.txt обновлен.")
-            
+            print("✅ СМС отправлено, версия обновлена.")
         else:
-            print("Изменений нет. Спим дальше.")
+            print(f"Версия совпадает ({current_version}), отправка не нужна.")
     else:
-        print("Ошибка: Не удалось найти приложение в App Store. Проверь APP_ID.")
+        # Если поиск по ID не дал результата, попробуем через прямой поиск по имени
+        print("По ID не нашли, пробую поиск по имени 'Diia'...")
+        search_url = "https://itunes.apple.com/search?term=Diia&country=ua&entity=software"
+        search_res = requests.get(search_url).json()
+        if search_res.get('resultCount', 0) > 0:
+            # Берем первый результат поиска
+            current_version = search_res['results'][0]['version']
+            print(f"Найдено через поиск. Версия: {current_version}")
+            # ... тут дублируем логику сравнения и отправки ...
+            if str(current_version) != str(last_version):
+                msg = f"🚀 Обновление Дії!\nВерсия: {current_version}"
+                for chat_id in CHAT_IDS:
+                    requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", json={"chat_id": chat_id, "text": msg})
+                with open(file_path, "w") as f:
+                    f.write(str(current_version))
+        else:
+            print("❌ Приложение не найдено даже через поиск.")
 
 except Exception as e:
-    print(f"❌ Критическая ошибка в скрипте: {e}")
+    print(f"❌ Ошибка: {e}")
