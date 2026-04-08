@@ -2,29 +2,26 @@ import requests
 import os
 import time
 import re
-import urllib.parse
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-APP_ID = "1483089069"
 
-# Основные источники
-URL_API = f"https://itunes.apple.com/ua/lookup?id={APP_ID}&t={int(time.time())}"
-URL_WEB = f"https://apps.apple.com/ua/app/id{APP_ID}"
-# Прокси-сервис для обхода бана по IP
-PROXY_URL = f"https://api.allorigins.win/raw?url={urllib.parse.quote(URL_API)}"
+# Канал 1: Через bundleId (другой путь в базе Apple)
+URL_BUNDLE = "https://itunes.apple.com/lookup?bundleId=ua.gov.diia.app&country=ua"
+# Канал 2: Сторонний сайт-агрегатор
+URL_AGGREGATOR = "https://www.iosnoops.com/appinfo/diia-for-iphone/"
 
 file_path = "version.txt"
 
-def send_full_alert(ver):
-    print(f"!!! НАШЕЛ ВЕРСИЮ: {ver}. ШЛЮ 10 СМС !!!")
+def send_attack(ver):
+    print(f"!!! ЕСТЬ ПРОБИТИЕ! ВЕРСИЯ: {ver} !!!")
     for i in range(1, 11):
-        text = f"🚨 ВЛАД, ПОДЪЕМ! ДІЯ {ver}! 🚨\n(Сигнал {i}/10)"
+        text = f"🚨 ВЛАД, ПОДЪЕМ! ДІЯ {ver}! 🚨\nСигнал {i}/10 — ОДЕССА ЖДЕТ!"
         try:
             requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", 
                          json={"chat_id": CHAT_ID, "text": text}, timeout=10)
         except: pass
-        time.sleep(6) # Ровно 1 минута вибрации
+        time.sleep(7) # ~70 секунд непрерывной долбежки
     with open(file_path, "w") as f:
         f.write(ver)
 
@@ -34,52 +31,45 @@ if os.path.exists(file_path):
 else:
     last_version = "0"
 
-print(f"--- СТАРТ ПРОВЕРКИ (В файле: {last_version}) ---")
+print(f"--- РАБОТАЕМ. В файле: {last_version} ---")
 current_version = None
 
+# ШАГ 1: Пробуем Канал 1 (Bundle ID)
 try:
-    # ПОПЫТКА 1: Прокси (обход бана IP)
-    print("Пробую через прокси...")
-    res = requests.get(PROXY_URL, timeout=20).json()
+    print("Пробую Bundle ID...")
+    # Добавляем случайный параметр, чтобы Apple не подсовывала кэш
+    res = requests.get(f"{URL_BUNDLE}&t={int(time.time())}", timeout=15).json()
     if res.get('resultCount', 0) > 0:
         current_version = str(res['results'][0]['version']).strip()
-        print(f"✅ Прокси сработал! Версия: {current_version}")
+        print(f"✅ Канал 1 выдал: {current_version}")
 except:
-    print("Прокси не помог.")
+    print("Канал 1 в бане.")
 
+# ШАГ 2: Если первый сдох, пробуем Канал 2 (Агрегатор)
 if not current_version:
     try:
-        # ПОПЫТКА 2: Прямой API с маскировкой
-        print("Пробую прямой API...")
-        h = {'User-Agent': 'Mozilla/5.0'}
-        res = requests.get(URL_API, headers=h, timeout=15).json()
-        if res.get('resultCount', 0) > 0:
-            current_version = str(res['results'][0]['version']).strip()
-            print(f"✅ Прямой API ожил! Версия: {current_version}")
-    except:
-        print("Прямой API всё еще в бане.")
-
-if not current_version:
-    try:
-        # ПОПЫТКА 3: Брутфорс поиск в коде страницы
-        print("Ищу в коде страницы...")
-        res = requests.get(URL_WEB, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20).text
-        # Ищем любую комбинацию цифр после слова version
-        match = re.search(r'\"version\":\"([\d\.]+)\"', res)
+        print("Пробую Агрегатор iOSNoops...")
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        res = requests.get(URL_AGGREGATOR, headers=headers, timeout=20).text
+        # Ищем версию в тексте страницы (обычно там "Current Version: X.X.X")
+        match = re.search(r'Version:\s*([\d\.]+)', res)
         if match:
             current_version = match.group(1).strip()
-            print(f"✅ Нашел в коде! Версия: {current_version}")
+            print(f"✅ Канал 2 выдал: {current_version}")
     except:
-        print("В коде страницы пусто.")
+        print("Канал 2 тоже лежит.")
 
-# ИТОГОВЫЙ РЕЗУЛЬТАТ
+# ИТОГ
 if current_version:
+    # Убираем всё, кроме цифр и точек на всякий случай
+    current_version = "".join(c for c in current_version if c.isdigit() or c == '.')
+    
     if current_version != last_version or last_version == "1":
-        send_full_alert(current_version)
+        send_attack(current_version)
     else:
-        print("Обновлений нет, версии совпали.")
+        print("Версии совпали. Пока тихо.")
 else:
-    print("❌ НИ ОДИН СПОСОБ НЕ СРАБОТАЛ.")
+    print("❌ ТОТАЛЬНЫЙ БАН. Apple перекрыла всё.")
     if last_version == "1":
         requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", 
-                     json={"chat_id": CHAT_ID, "text": "⚠️ ВСЕ МЕТОДЫ СДОХЛИ. Apple заблокировала даже прокси."})
+                     json={"chat_id": CHAT_ID, "text": "⚠️ ТРЕВОГА! Бот полностью ослеп, Apple заблокировала все каналы!"})
